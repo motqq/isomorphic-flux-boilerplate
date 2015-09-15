@@ -2,6 +2,8 @@ import React, {Component, PropTypes} from 'react';
 import {IntlMixin} from 'react-intl';
 import capitalize from 'lodash/string/capitalize';
 
+const canUseDOM = !!(typeof window !== 'undefined' && window.document && window.document.createElement);
+
 class Profile extends Component {
 
   static propTypes = {
@@ -59,9 +61,16 @@ class Profile extends Component {
     }
 
     // Set page title
-    this.props.flux
+    if (canUseDOM) {
+      this.props.flux
       .getActions('page-title')
       .set.defer(title);
+    }
+    else {
+      this.props.flux
+      .getActions('page-title')
+      .set(title);
+    }
   }
 
   _getFullName({first, last}) {
