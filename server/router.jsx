@@ -2,20 +2,24 @@ import debug from 'debug';
 
 import React from 'react';
 import Router from 'react-router';
-import Location from 'react-router/lib/Location';
+import createLocation from 'history/lib/createLocation'
+import { RoutingContext, match } from 'react-router'
 
 // Paths are relative to `app` directory
 import routes from 'routes';
 import Flux from 'utils/flux';
+
+import util from 'util';
+
 
 // We need wrap `Router.run` into a promise
 // in order to use the keyword `yield` and keep
 // the correct way `koajs` works
 const promisifiedRouter = (customRoutes, location) => {
   return new Promise((resolve) => {
-    Router.run(customRoutes, location, (error, initialState, transition) =>
-      resolve({error, initialState, transition})
-    );
+    match({ routes, location }, (error, redirectLocation, renderProps) => {
+       resolve({error, redirectLocation, renderProps})
+    });
   });
 };
 
@@ -35,22 +39,24 @@ export default function *() {
   debug('dev')(`locale of request: ${locale}`);
 
   try {
+
+    const location = createLocation(this.request.url)
+
     // Pass correct location of the request to `react-router`
     // it will return the matched components for the route into `initialState`
-    const location = new Location(this.request.path, this.request.query);
-    const {error, initialState, transition} = yield promisifiedRouter(routes, location);
+    //const location = new Location(this.request.path, this.request.query);
+    const {error, redirectLocation, renderProps} = yield promisifiedRouter(routes, location);
 
+    if (redirectLocation)
+        return this.redirect(301, redirectLocation.pathname + redirectLocation.search)
     // Render 500 error page from server
-    if (error) throw error;
-
-    // Handle component `onEnter` transition
-    const {isCancelled, redirectInfo} = transition;
-    if (isCancelled) return this.redirect(redirectInfo.pathname);
+    else if (error)
+        throw error;
 
     // Render application of correct location
     // We need to re-define `createElement` of `react-router`
     // in order to include `flux` on children components props
-    const routerProps = Object.assign({}, initialState,
+    const routerProps = Object.assign({}, renderProps,
       {
         location,
         createElement: (component, props) => {
@@ -66,7 +72,7 @@ export default function *() {
     );
 
     // Use `alt-resolver` to render component with fetched data
-    const {body, title} = yield flux.render(<Router {...routerProps} />);
+    const {body, title} = yield flux.render(<RoutingContext {...routerProps} />);
 
     // Assets name are found into `webpack-stats`
     const assets = require('./webpack-stats.json');
